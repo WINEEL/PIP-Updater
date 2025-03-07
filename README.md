@@ -11,8 +11,8 @@ PIP Updater is a simple tool to update Python and all installed packages automat
 ## Installation
 1. Clone this repository:
    ```bash
-   git clone https://github.com/WINEEL/PIP_Updater.git
-   cd PIP_Updater
+   git clone https://github.com/WINEEL/PIP-Updater.git
+   cd PIP-Updater
    ```
 2. Install dependencies:
    ```bash
@@ -32,7 +32,7 @@ python main.py --dry-run
 ## Build .exe (Windows Only)
 To create a standalone `.exe` file:
 ```bash
-pyinstaller --onefile --name PIP_Updater main.py
+pyinstaller --onefile --name PIP-Updater main.py
 ```
 
 ## License
