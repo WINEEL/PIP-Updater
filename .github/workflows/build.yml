@@ -1,0 +1,40 @@
+name: Build PIP Updater EXE
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --name PIP_Updater main.py
+
+      - name: Upload EXE as an Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: PIP_Updater
+          path: dist/PIP_Updater.exe
+
+      - name: Release EXE (Optional)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/PIP_Updater.exe

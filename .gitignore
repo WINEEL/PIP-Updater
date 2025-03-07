@@ -1,0 +1,24 @@
+# Ignore temporary Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore virtual environment
+venv/
+.env/
+
+# Ignore build and distribution folders
+build/
+dist/
+*.spec
+
+# Ignore log files
+pip_updater.log
+
+# Ignore temporary data files
+datap_/
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
