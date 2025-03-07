@@ -22,3 +22,6 @@ datap_/
 # Ignore OS-specific files
 .DS_Store
 Thumbs.db
+
+# Ignore .exe files
+*.exe
