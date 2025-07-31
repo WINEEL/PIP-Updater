@@ -113,7 +113,7 @@ A sample icon file (`static/icon.ico`) is already included in the repo. I create
 ### Platform-specific behavior:
 
 | OS         | Output Format       | Icon Support                      |
-|------------|---------------------|-----------------------------------|
+|:----------:|---------------------|-----------------------------------|
 | **Windows**| `PIP_Updater.exe`   | `.ico` supported                  |
 | **macOS**  | `PIP_Updater` binary| Use `.icns` if building `.app`    |
 | **Linux**  | `PIP_Updater` binary| No icon support by default        |
