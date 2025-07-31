@@ -1,8 +1,9 @@
-import argparse
 import os
+import sys
 import shutil
-import subprocess
 import logging
+import argparse
+import subprocess
 from time import sleep
 
 from application.filterpip import filterpip
@@ -14,6 +15,7 @@ class PipUpdate:
     def __init__(self, dry_run=False):
         self.dry_run = dry_run
         self.data_dir = "datap_"
+        self.python_cmd = sys.executable  # Path to current Python interpreter
 
     def run_command(self, command):
         """Executes a shell command with error handling."""
@@ -28,7 +30,7 @@ class PipUpdate:
     def update_pip(self):
         """Updates pip to the latest version."""
         print("Updating pip...")
-        self.run_command("python -m pip install --upgrade pip")
+        self.run_command(f"{self.python_cmd} -m pip install --upgrade pip")
 
     def create_data_dir(self):
         """Creates a hidden directory for storing temp files."""
@@ -41,13 +43,13 @@ class PipUpdate:
     def get_installed_packages(self):
         """Gets the list of installed packages."""
         print("Retrieving installed packages...")
-        self.run_command(f"pip freeze > {self.data_dir}/old.txt")
+        self.run_command(f"{self.python_cmd} -m pip freeze > {self.data_dir}/old.txt")
 
     def update_packages(self):
         """Updates all installed packages."""
         print("Updating all installed packages...")
-        filterpip()  # Filter the list
-        self.run_command(f"pip install --upgrade -r {self.data_dir}/new.txt")
+        filterpip()
+        self.run_command(f"{self.python_cmd} -m pip install --upgrade -r {self.data_dir}/new.txt")
 
     def cleanup(self):
         """Cleans up temp files."""
