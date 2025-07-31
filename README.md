@@ -88,7 +88,7 @@ It records timestamps, commands run, and any errors encountered — useful for d
 
 
 ## License
-This project is **open-source** and licensed under the **MIT License**.
+This project is **open-source** and licensed under the **MIT License**.  
 Feel free to modify and improve upon it!
 
 
