@@ -1,5 +1,5 @@
 # PIP-Updater
-A cross-platform Python CLI tool that works seamlessly on **macOS, Windows, and Linux** — update `pip` and all your installed packages with a single command.
+A cross-platform Python CLI tool that works seamlessly on **macOS, Windows, and Linux**. It updates `pip` and all your installed packages with a single command.
 
 
 ## Features
@@ -84,7 +84,7 @@ python3 cli/cli.py
 ## Log File
 After running the tool, a log file named `pip_updater.log` is automatically created in the root directory.
 
-It records timestamps, commands run, and any errors encountered — useful for debugging or checking what happened during the update.
+t records timestamps, commands run, and any errors encountered. This is useful for debugging or checking what happened during the update.
 
 
 ## License
@@ -106,7 +106,7 @@ Want to turn this into a standalone executable? You can manually use:
 pyinstaller --onefile --name PIP_Updater --icon static/icon.ico main.py
 ```
 
-A sample icon file (`static/icon.ico`) is already included in the repo. I created it just to complete the structure — feel free to **use, modify, or replace** it as you wish.
+A sample icon file (`static/icon.ico`) is already included in the repo. I created it just to complete the structure. Feel free to **use, modify, or replace** it as you wish.
 
 > **Note:** PyInstaller works on **Windows, macOS, and Linux**, but you can only build executables **for your current operating system**. Cross-compilation is not supported.
 
