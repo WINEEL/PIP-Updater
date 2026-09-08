@@ -12,13 +12,14 @@ handling, and error reporting.
 
 ## Safety
 
-The normal command bulk-upgrades packages in the Python environment used to
-launch it. That can create dependency incompatibilities, so use it only in an
-environment you are comfortable modifying.
+The normal command bulk-upgrades packages in the selected Python environment.
+In source mode without `--python`, that is the environment used to launch the
+program. Upgrades can create dependency incompatibilities, so use this tool only
+with an environment you are comfortable modifying.
 
 ## Features
 
-- Upgrades `pip` for the active source Python interpreter.
+- Upgrades `pip` for the selected Python interpreter.
 - Discovers installed packages with `pip freeze`.
 - Passes supported pinned package entries back to `pip` for upgrade.
 - Provides a read-only `--dry-run` package-discovery mode.
@@ -28,7 +29,7 @@ environment you are comfortable modifying.
 ## Requirements
 
 - Python 3.8 or newer.
-- `pip` available for the Python interpreter used to run the project.
+- `pip` available for the selected target Python interpreter.
 
 Designed for Python 3 on Windows, macOS, and Linux; full cross-platform
 integration has not been comprehensively verified.
@@ -41,12 +42,16 @@ executable experiment; it is not a runtime dependency.
 
 The commands below run the normal updater, perform read-only discovery with
 `--dry-run`, and invoke the same application through the thin CLI wrapper.
+When running from source, the default target is the Python interpreter used to
+launch `main.py`. Use `--python PATH` to explicitly select a different Python
+interpreter after validating that it is the intended environment.
 
 ### macOS / Linux
 
 ```bash
 python3 main.py
 python3 main.py --dry-run
+python3 main.py --python /path/to/python --dry-run
 python3 cli/cli.py
 ```
 
@@ -55,6 +60,7 @@ python3 cli/cli.py
 ```powershell
 py main.py
 py main.py --dry-run
+py main.py --python "C:\path\to\python.exe" --dry-run
 py cli/cli.py
 ```
 
@@ -87,18 +93,30 @@ The original repository history includes experimentation with a Windows
 PyInstaller build workflow and artifact/release configuration. The icon remains
 in `static/icon.ico` as part of that history.
 
-Frozen executable package updating is currently unsupported. In a PyInstaller
-application, `sys.executable` identifies the bundled executable rather than a
-target Python interpreter. The current code detects that situation and exits
-with an actionable error instead of recursively launching the bundle as
-`python -m pip`. A build command is intentionally not presented as a supported
-updater workflow.
+In a PyInstaller application, `sys.executable` identifies the bundled
+executable rather than a target Python interpreter. Packaged execution therefore
+requires an explicit host Python interpreter and validates it before any package
+operation:
+
+```powershell
+PIP-Updater.exe --python "C:\path\to\python.exe" --dry-run
+```
+
+```bash
+./PIP-Updater --python /path/to/python --dry-run
+```
+
+Native Windows, macOS, and Linux binaries are intended to be built separately
+on their respective operating systems. Downloadable binaries do not exist yet,
+and packaged execution has not yet been integration-tested. A build command is
+intentionally not presented as a supported updater workflow.
 
 ## Limitations
 
 - Bulk upgrades can affect dependency compatibility.
 - Editable and direct-reference freeze entries are skipped.
-- Frozen executable package updating is not implemented.
+- Packaged execution requires an explicit host Python interpreter.
+- Packaged execution has not yet been integration-tested.
 - Real package-environment behavior is not comprehensively verified.
 
 ## License
