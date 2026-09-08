@@ -4,14 +4,14 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Ignore virtual environment
+# Ignore virtual environments and local environment configuration
 venv/
-.env/
+.venv/
+.env
 
 # Ignore build and distribution folders
 build/
 dist/
-*.spec
 
 # Ignore log files
 pip_updater.log

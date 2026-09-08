@@ -1,14 +1,28 @@
-def filterpip():
-    """Reads the old.txt file, extracts package names, and writes to new.txt"""
-    input_file = "datap_/old.txt"
-    output_file = "datap_/new.txt"
+import re
+import sys
 
-    try:
-        with open(input_file, encoding="utf-8") as f, open(output_file, "w", encoding="utf-8") as g:
-            for line in f:
-                if "=" in line:
-                    package = line.split("=", maxsplit=1)[0].strip()
-                    g.write(package + "\n")
-        print("Filtered package list saved to new.txt")
-    except FileNotFoundError:
-        print(f"Error: {input_file} not found!")
+
+PINNED_PACKAGE = re.compile(
+    r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)={2,3}[^=].*$"
+)
+
+
+def filterpip(freeze_output):
+    """Return package names from supported pinned pip freeze entries."""
+    packages = []
+
+    for raw_line in freeze_output.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        match = PINNED_PACKAGE.fullmatch(line)
+        if match:
+            packages.append(match.group(1))
+        else:
+            print(
+                "Warning: skipping an unsupported package entry.",
+                file=sys.stderr,
+            )
+
+    return packages
