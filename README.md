@@ -107,4 +107,4 @@ PIP-Updater is available under the standard MIT License. See `LICENSE`.
 
 ## Author
 
-Wineel Wilson Dasari — [wineel10](https://github.com/wineel10)
+[Wineel Wilson Dasari](https://github.com/wineel10)
