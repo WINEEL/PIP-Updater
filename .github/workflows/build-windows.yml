@@ -1,0 +1,139 @@
+name: Build Windows executable
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          architecture: x64
+
+      - name: Run test suite
+        shell: pwsh
+        run: python -B -m unittest discover -s tests -v
+
+      - name: Run main help check
+        shell: pwsh
+        run: python -B main.py --help
+
+      - name: Run CLI wrapper help check
+        shell: pwsh
+        run: python -B cli/cli.py --help
+
+      - name: Install PyInstaller build dependency
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check pyinstaller==6.22.2
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: python -m PyInstaller --onefile --console --name PIP-Updater --icon static/icon.ico main.py
+
+      - name: Inspect Windows executable
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+            throw "Expected executable was not created: $artifact"
+          }
+
+          $artifactInfo = Get-Item -LiteralPath $artifact
+          Write-Host "Artifact: $($artifactInfo.FullName)"
+          Write-Host "Size: $($artifactInfo.Length) bytes"
+
+      - name: Run packaged help smoke test
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $helpOutput = (& $artifact --help 2>&1 | Out-String)
+          $helpExitCode = $LASTEXITCODE
+          Write-Host $helpOutput
+
+          if ($helpExitCode -ne 0) {
+            throw "Packaged --help exited with code $helpExitCode"
+          }
+          if ($helpOutput -notmatch '(?i)--python(?:\s+PATH)?') {
+            throw "Packaged --help did not advertise the --python option"
+          }
+
+      - name: Verify frozen-mode safety guard
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $guardOutput = (& $artifact 2>&1 | Out-String)
+          $guardExitCode = $LASTEXITCODE
+          Write-Host $guardOutput
+          Write-Host "Exit code: $guardExitCode"
+
+          if ($guardExitCode -eq 0) {
+            throw "Packaged executable unexpectedly succeeded without --python"
+          }
+          if ($guardOutput -notmatch '(?i)interpreter.*--python\s+PATH') {
+            throw "Packaged executable did not emit the expected --python interpreter requirement"
+          }
+          exit 0
+
+      - name: Run packaged dry-run integrity test
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $venvPath = Join-Path $env:RUNNER_TEMP ("pip-updater-smoke-" + [guid]::NewGuid().ToString("N"))
+          python -m venv $venvPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not create the temporary smoke-test environment"
+          }
+
+          $venvPython = Join-Path $venvPath "Scripts\python.exe"
+          $pipBefore = (& $venvPython -m pip --version | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the temporary environment's pip version before the dry run"
+          }
+          $freezeBefore = (& $venvPython -m pip freeze | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not capture pip freeze before the dry run"
+          }
+
+          $dryRunOutput = (& $artifact --python $venvPython --dry-run 2>&1 | Out-String)
+          $dryRunExitCode = $LASTEXITCODE
+          Write-Host $dryRunOutput
+          if ($dryRunExitCode -ne 0) {
+            throw "Packaged dry run exited with code $dryRunExitCode"
+          }
+
+          $pipAfter = (& $venvPython -m pip --version | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the temporary environment's pip version after the dry run"
+          }
+          $freezeAfter = (& $venvPython -m pip freeze | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not capture pip freeze after the dry run"
+          }
+
+          Write-Host "Pip before: $($pipBefore.Trim())"
+          Write-Host "Pip after:  $($pipAfter.Trim())"
+          if (-not [string]::Equals($pipBefore, $pipAfter, [System.StringComparison]::Ordinal)) {
+            throw "The temporary environment's pip version changed during the dry run"
+          }
+          if (-not [string]::Equals($freezeBefore, $freezeAfter, [System.StringComparison]::Ordinal)) {
+            throw "The temporary environment's installed packages changed during the dry run"
+          }
+          Write-Host "Temporary environment remained unchanged."
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: PIP-Updater-windows-x64
+          path: dist\PIP-Updater.exe
+          if-no-files-found: error
