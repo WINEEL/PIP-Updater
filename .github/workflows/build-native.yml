@@ -1,0 +1,291 @@
+name: Build native executables
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-native:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            python_architecture: x64
+          - os: macos-latest
+            platform: macos-arm64
+            python_architecture: arm64
+            uname_architecture: arm64
+            file_architecture: arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+            python_architecture: x64
+            uname_architecture: x86_64
+            file_architecture: x86-64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          architecture: ${{ matrix.python_architecture }}
+
+      - name: Run test suite
+        run: python -B -m unittest discover -s tests -v
+
+      - name: Run main help check
+        run: python -B main.py --help
+
+      - name: Run CLI wrapper help check
+        run: python -B cli/cli.py --help
+
+      - name: Install PyInstaller build dependency
+        run: python -m pip install --disable-pip-version-check pyinstaller==6.22.2
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python -m PyInstaller --onefile --console --name PIP-Updater --icon static/icon.ico main.py
+
+      - name: Build macOS or Linux executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python -m PyInstaller --onefile --console --name PIP-Updater main.py
+
+      - name: Inspect Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+            throw "Expected executable was not created: $artifact"
+          }
+          if ($env:RUNNER_ARCH -ne "X64") {
+            throw "Expected an X64 Windows runner, received $env:RUNNER_ARCH"
+          }
+
+          $artifactInfo = Get-Item -LiteralPath $artifact
+          Write-Host "Artifact: $($artifactInfo.FullName)"
+          Write-Host "Size: $($artifactInfo.Length) bytes"
+          Write-Host "Runner architecture: $env:RUNNER_ARCH"
+
+      - name: Inspect macOS or Linux executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          artifact="dist/PIP-Updater"
+          if [[ ! -f "$artifact" ]]; then
+            echo "Expected executable was not created: $artifact" >&2
+            exit 1
+          fi
+          if [[ ! -x "$artifact" ]]; then
+            echo "Expected artifact is not executable: $artifact" >&2
+            exit 1
+          fi
+
+          file_output="$(file "$artifact")"
+          actual_architecture="$(uname -m)"
+          printf '%s\n' "$file_output"
+          printf 'Runner architecture: %s\n' "$actual_architecture"
+          ls -lh "$artifact"
+
+          if [[ "$actual_architecture" != "${{ matrix.uname_architecture }}" ]]; then
+            echo "Expected runner architecture ${{ matrix.uname_architecture }}, received $actual_architecture" >&2
+            exit 1
+          fi
+          if [[ "$file_output" != *"${{ matrix.file_architecture }}"* ]]; then
+            echo "Executable architecture did not match ${{ matrix.file_architecture }}" >&2
+            exit 1
+          fi
+
+      - name: Run packaged help smoke test on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $helpOutput = (& $artifact --help 2>&1 | Out-String)
+          $helpExitCode = $LASTEXITCODE
+          Write-Host $helpOutput
+
+          if ($helpExitCode -ne 0) {
+            throw "Packaged --help exited with code $helpExitCode"
+          }
+          if ($helpOutput -notmatch '(?i)--python(?:\s+PATH)?') {
+            throw "Packaged --help did not advertise the --python option"
+          }
+
+      - name: Run packaged help smoke test on macOS or Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set +e
+          help_output="$(./dist/PIP-Updater --help 2>&1)"
+          help_exit_code=$?
+          set -e
+          printf '%s\n' "$help_output"
+
+          if [[ $help_exit_code -ne 0 ]]; then
+            echo "Packaged --help exited with code $help_exit_code" >&2
+            exit 1
+          fi
+          if ! grep -Eqi -- '--python([[:space:]]+PATH)?' <<<"$help_output"; then
+            echo "Packaged --help did not advertise the --python option" >&2
+            exit 1
+          fi
+
+      - name: Verify frozen-mode safety guard on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $guardOutput = (& $artifact 2>&1 | Out-String)
+          $guardExitCode = $LASTEXITCODE
+          Write-Host $guardOutput
+          Write-Host "Exit code: $guardExitCode"
+
+          if ($guardExitCode -eq 0) {
+            throw "Packaged executable unexpectedly succeeded without --python"
+          }
+          if ($guardOutput -notmatch '(?i)interpreter.*--python\s+PATH') {
+            throw "Packaged executable did not emit the expected --python interpreter requirement"
+          }
+          exit 0
+
+      - name: Verify frozen-mode safety guard on macOS or Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set +e
+          guard_output="$(./dist/PIP-Updater 2>&1)"
+          guard_exit_code=$?
+          set -e
+          printf '%s\n' "$guard_output"
+          printf 'Exit code: %s\n' "$guard_exit_code"
+
+          if [[ $guard_exit_code -eq 0 ]]; then
+            echo "Packaged executable unexpectedly succeeded without --python" >&2
+            exit 1
+          fi
+          if ! grep -Eqi -- 'interpreter.*--python[[:space:]]+PATH' <<<"$guard_output"; then
+            echo "Packaged executable did not emit the expected --python interpreter requirement" >&2
+            exit 1
+          fi
+          exit 0
+
+      - name: Run packaged dry-run integrity test on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $PWD "dist\PIP-Updater.exe"
+          $venvPath = Join-Path $env:RUNNER_TEMP ("pip-updater-smoke-" + [guid]::NewGuid().ToString("N"))
+          python -m venv $venvPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not create the temporary smoke-test environment"
+          }
+
+          $venvPython = Join-Path $venvPath "Scripts\python.exe"
+          $pipBefore = (& $venvPython -m pip --version | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the temporary environment's pip version before the dry run"
+          }
+          $freezeBefore = (& $venvPython -m pip freeze | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not capture pip freeze before the dry run"
+          }
+
+          $dryRunOutput = (& $artifact --python $venvPython --dry-run 2>&1 | Out-String)
+          $dryRunExitCode = $LASTEXITCODE
+          Write-Host $dryRunOutput
+          if ($dryRunExitCode -ne 0) {
+            throw "Packaged dry run exited with code $dryRunExitCode"
+          }
+
+          $pipAfter = (& $venvPython -m pip --version | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the temporary environment's pip version after the dry run"
+          }
+          $freezeAfter = (& $venvPython -m pip freeze | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not capture pip freeze after the dry run"
+          }
+
+          Write-Host "Pip before: $($pipBefore.Trim())"
+          Write-Host "Pip after:  $($pipAfter.Trim())"
+          if (-not [string]::Equals($pipBefore, $pipAfter, [System.StringComparison]::Ordinal)) {
+            throw "The temporary environment's pip version changed during the dry run"
+          }
+          if (-not [string]::Equals($freezeBefore, $freezeAfter, [System.StringComparison]::Ordinal)) {
+            throw "The temporary environment's installed packages changed during the dry run"
+          }
+          Write-Host "Temporary environment remained unchanged."
+
+      - name: Run packaged dry-run integrity test on macOS or Linux
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          venv_root="$(mktemp -d "${RUNNER_TEMP}/pip-updater-smoke.XXXXXX")"
+          venv_path="$venv_root/venv"
+          python -m venv "$venv_path"
+          venv_python="$venv_path/bin/python"
+
+          pip_before="$("$venv_python" -m pip --version)"
+          freeze_before="$("$venv_python" -m pip freeze)"
+
+          set +e
+          dry_run_output="$(./dist/PIP-Updater --python "$venv_python" --dry-run 2>&1)"
+          dry_run_exit_code=$?
+          set -e
+          printf '%s\n' "$dry_run_output"
+          if [[ $dry_run_exit_code -ne 0 ]]; then
+            echo "Packaged dry run exited with code $dry_run_exit_code" >&2
+            exit 1
+          fi
+
+          pip_after="$("$venv_python" -m pip --version)"
+          freeze_after="$("$venv_python" -m pip freeze)"
+
+          printf 'Pip before: %s\n' "$pip_before"
+          printf 'Pip after:  %s\n' "$pip_after"
+          if [[ "$pip_before" != "$pip_after" ]]; then
+            echo "The temporary environment's pip version changed during the dry run" >&2
+            exit 1
+          fi
+          if [[ "$freeze_before" != "$freeze_after" ]]; then
+            echo "The temporary environment's installed packages changed during the dry run" >&2
+            exit 1
+          fi
+          echo "Temporary environment remained unchanged."
+
+      - name: Archive macOS or Linux executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          archive="$PWD/dist/PIP-Updater-${{ matrix.platform }}.tar.gz"
+          tar -czf "$archive" -C "$PWD/dist" PIP-Updater
+          ls -lh "$archive"
+
+      - name: Upload Windows executable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: PIP-Updater-${{ matrix.platform }}
+          path: dist\PIP-Updater.exe
+          if-no-files-found: error
+
+      - name: Upload macOS or Linux executable archive
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: PIP-Updater-${{ matrix.platform }}
+          path: dist/PIP-Updater-${{ matrix.platform }}.tar.gz
+          if-no-files-found: error
